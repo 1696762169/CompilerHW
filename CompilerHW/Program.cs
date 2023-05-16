@@ -11,15 +11,15 @@ namespace CompilerHW
             using TextReader text_reader = File.OpenText("input.txt");
 
             // Create an input character stream from standard in
-            var input = new AntlrInputStream(text_reader);
+            AntlrInputStream input = new(text_reader);
             // Create an ExprLexer that feeds from that stream
-            HelloLexer lexer = new HelloLexer(input);
+            CMinusMinusLexer lexer = new(input);
             // Create a stream of tokens fed by the lexer
-            CommonTokenStream tokens = new CommonTokenStream(lexer);
+            CommonTokenStream tokens = new(lexer);
             // Create a parser that feeds off the token stream
-            HelloParser parser = new HelloParser(tokens);
+            CMinusMinusParser parser = new(tokens);
             // Begin parsing at rule r
-            IParseTree tree = parser.r();
+            IParseTree tree = parser.program();
 
             Console.WriteLine(tree.ToStringTree(parser)); // print LISP-style tree
 
