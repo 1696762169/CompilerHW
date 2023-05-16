@@ -7,7 +7,7 @@ IF : 'if' ;
 ELSE : 'else' ;
 WHILE : 'while' ;
 RETURN : 'return' ;
-ID : [a-zA-Z] [a-zA-Z0-9]*;
+ID : [a-zA-Z][a-zA-Z0-9]*;
 NUM : [0-9]+ ;
 ASSIGN : '=' ;
 PLUS : '+' ;
@@ -31,10 +31,9 @@ RIGHT_BRACE : '}' ;
 LEFT_BRACKET : '[' ;
 RIGHT_BRACKET : ']' ;
 WS : [ \t\r\n]+ -> skip ;
-END_OF_FILE : '#' ;
 
 // 语法定义
-program : declaration* END_OF_FILE;
+program : declaration*;
 
 declaration : INT ID declarationType
             | VOID ID functionDeclaration

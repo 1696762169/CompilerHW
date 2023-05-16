@@ -8,12 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Hello.g4" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Antlr4.Runtime.Standard" Version="4.12.0" />
     <PackageReference Include="Antlr4BuildTasks" Version="12.2.0" />
   </ItemGroup>
 
-    <ItemGroup>
-		<Antlr4 Include="Hello.g4" />
+	<ItemGroup>
+		<Antlr4 Include="CMinusMinus.g4" />
 	</ItemGroup>
 
 </Project>

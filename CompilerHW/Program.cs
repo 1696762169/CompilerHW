@@ -8,23 +8,35 @@ namespace CompilerHW
     {
         static void Main(string[] args)
         {
-            using TextReader text_reader = File.OpenText("input.txt");
+            using TextReader textReader = File.OpenText("input.txt");
 
-            // Create an input character stream from standard in
-            AntlrInputStream input = new(text_reader);
-            // Create an ExprLexer that feeds from that stream
+            // 创建字符流
+            AntlrInputStream input = new(textReader);
+            // 创建词法分析器
             CMinusMinusLexer lexer = new(input);
-            // Create a stream of tokens fed by the lexer
+            // 通过词法分析器创建Token流
             CommonTokenStream tokens = new(lexer);
-            // Create a parser that feeds off the token stream
+            // 展示词法分析结果
+            Display.ShowLexer(tokens, new int[]
+            {
+                CMinusMinusLexer.INT,
+                CMinusMinusLexer.VOID,
+                CMinusMinusLexer.IF,
+                CMinusMinusLexer.ELSE,
+                CMinusMinusLexer.WHILE,
+                CMinusMinusLexer.RETURN,
+            });
+            Display.ShowLexer(tokens, new int[]
+            {
+                CMinusMinusLexer.ID,
+            });
+
+            // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
-            // Begin parsing at rule r
+            // 通过语法分析器创建语法树
             IParseTree tree = parser.program();
 
-            Console.WriteLine(tree.ToStringTree(parser)); // print LISP-style tree
-
-            // Look in obj/Debug/net6.0/HelloParser.cs
-            // public RContext r()
+            //Console.WriteLine(tree.ToStringTree(parser));
         }
     }
 }
