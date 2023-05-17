@@ -41,9 +41,13 @@ namespace CompilerHW
             Console.WriteLine($"第 {token.TokenIndex + 1:000} 个token：{token.Text, -10}，类型：{CMinusMinusLexer.ruleNames[token.Type - 1]}");
         }
 
-        public static void ShowParser(IParseTree tree)
+        public static void ShowParser(RuleContext tree, string[] ruleNames)
         {
-            Console.WriteLine(tree.ToStringTree());
+            Console.WriteLine(tree.ToString(ruleNames));
+            for (int i = 0; i < tree.ChildCount; ++i)
+            {
+                ShowParser(RuleContext.GetChildContext(tree, i), ruleNames);
+            }
         }
     }
 }

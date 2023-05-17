@@ -2,6 +2,7 @@
 #define SHOW_PARSER
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
+using Antlr4.Runtime.Tree.Xpath;
 using System.IO;
 
 namespace CompilerHW
@@ -20,28 +21,38 @@ namespace CompilerHW
             CommonTokenStream tokens = new(lexer);
 #if SHOW_LEXER
             // 展示词法分析结果
-            Display.ShowLexer(tokens, new[]
-            {
-                CMinusMinusLexer.INT,
-                CMinusMinusLexer.VOID,
-                CMinusMinusLexer.IF,
-                CMinusMinusLexer.ELSE,
-                CMinusMinusLexer.WHILE,
-                CMinusMinusLexer.RETURN,
-            });
-            Display.ShowLexer(tokens, new[]
-            {
-                CMinusMinusLexer.ID,
-            });
+            //Display.ShowLexer(tokens, new[]
+            //{
+            //    CMinusMinusLexer.INT,
+            //    CMinusMinusLexer.VOID,
+            //    CMinusMinusLexer.IF,
+            //    CMinusMinusLexer.ELSE,
+            //    CMinusMinusLexer.WHILE,
+            //    CMinusMinusLexer.RETURN,
+            //});
+            //Display.ShowLexer(tokens, new[]
+            //{
+            //    CMinusMinusLexer.ID,
+            //});
+            //Display.ShowLexer(tokens);
 #endif
 
             // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
             // 通过语法分析器创建语法树
-            IParseTree tree = parser.program();
+            RuleContext tree = parser.program();
+
 #if SHOW_PARSER
             // 展示语法分析结果
-            Display.ShowParser(tree);
+            //ParseTreeWalker.Default.Walk(new DisplayTree(), tree);
+            //Console.WriteLine(tree.ToStringTree(new CMinusMinusBaseListener()));
+            //Display.ShowParser(tree, parser.RuleNames);
+
+            //new DisplayTree(CMinusMinusParser.ruleNames).VisitChildren(tree);
+            DisplayTree display = new (CMinusMinusParser.ruleNames);
+            display.Visit(tree);
+            display.PrintTreeAsJson();
+            display.WriteToFileAsJson("ParseTree.json");
 #endif
         }
     }
