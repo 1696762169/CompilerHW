@@ -33,15 +33,15 @@ namespace CompilerHW
             {
                 jsonBuilder.Append(", \"Children\": [ ");
 
-                bool havePrev = false;
                 for (int i = 0; i < tree.ChildCount; i++)
                 {
-                    if (havePrev && tree.GetChild(i) is RuleContext)
+                    if (i > 0)
                         jsonBuilder.Append(", ");
-                    if (tree.GetChild(i) is RuleContext)
-                        havePrev = true;
 
-                    Visit(tree.GetChild(i));
+                    if (tree.GetChild(i) is RuleContext)
+                        Visit(tree.GetChild(i));
+                    else
+                        jsonBuilder.Append("{\"Token\": \"" + ((CommonToken)tree.GetChild(i).Payload).Text + "\"}");
                 }
 
                 jsonBuilder.Append(" ]");
