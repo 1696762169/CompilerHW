@@ -1,9 +1,9 @@
 ﻿//#define SHOW_LEXER
-#define SHOW_PARSER
+//#define SHOW_PARSER
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
-using Antlr4.Runtime.Tree.Xpath;
 using System.IO;
+using LLVMSharp;
 
 namespace CompilerHW
 {
@@ -40,20 +40,17 @@ namespace CompilerHW
             // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
             // 通过语法分析器创建语法树
-            RuleContext tree = parser.program();
-
+            ParserRuleContext tree = parser.program();
 #if SHOW_PARSER
             // 展示语法分析结果
-            //ParseTreeWalker.Default.Walk(new DisplayTree(), tree);
-            //Console.WriteLine(tree.ToStringTree(new CMinusMinusBaseListener()));
-            //Display.ShowParser(tree, parser.RuleNames);
-
-            //new DisplayTree(CMinusMinusParser.ruleNames).VisitChildren(tree);
             DisplayTree display = new (CMinusMinusParser.ruleNames);
-            display.Visit(tree);
+            display.Display(tree);
             display.PrintTreeAsJson();
             display.WriteToFileAsJson("ParseTree.json");
 #endif
+
+            // 将语法树转换为四元式序列
+            QuadrupleGenerator quadGenerator = new();
         }
     }
 }

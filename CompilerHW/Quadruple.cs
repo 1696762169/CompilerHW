@@ -12,8 +12,8 @@ namespace CompilerHW
     internal class Quadruple
     {
         public string Operator { get; set; }
-        public string Operand1 { get; set; }
-        public string Operand2 { get; set; }
-        public string Result { get; set; }
+        public string? Operand1 { get; set; }
+        public string? Operand2 { get; set; }
+        public string? Result { get; set; }
     }
 }
