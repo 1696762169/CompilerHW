@@ -1,4 +1,6 @@
-﻿using Antlr4.Runtime;
+﻿//#define SHOW_LEXER
+#define SHOW_PARSER
+using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using System.IO;
 
@@ -6,7 +8,7 @@ namespace CompilerHW
 {
     internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             using TextReader textReader = File.OpenText("input.txt");
 
@@ -16,8 +18,9 @@ namespace CompilerHW
             CMinusMinusLexer lexer = new(input);
             // 通过词法分析器创建Token流
             CommonTokenStream tokens = new(lexer);
+#if SHOW_LEXER
             // 展示词法分析结果
-            Display.ShowLexer(tokens, new int[]
+            Display.ShowLexer(tokens, new[]
             {
                 CMinusMinusLexer.INT,
                 CMinusMinusLexer.VOID,
@@ -26,17 +29,20 @@ namespace CompilerHW
                 CMinusMinusLexer.WHILE,
                 CMinusMinusLexer.RETURN,
             });
-            Display.ShowLexer(tokens, new int[]
+            Display.ShowLexer(tokens, new[]
             {
                 CMinusMinusLexer.ID,
             });
+#endif
 
             // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
             // 通过语法分析器创建语法树
             IParseTree tree = parser.program();
-
-            //Console.WriteLine(tree.ToStringTree(parser));
+#if SHOW_PARSER
+            // 展示语法分析结果
+            Display.ShowParser(tree);
+#endif
         }
     }
 }
