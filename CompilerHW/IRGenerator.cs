@@ -1,13 +1,12 @@
 ﻿using Antlr4.Runtime;
 using LLVMSharp;
-using SharpCompress.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 using Antlr4.Runtime.Tree;
+using LLVMSharp.Interop;
 using static CMinusMinusParser;
 
 namespace CompilerHW
@@ -17,10 +16,12 @@ namespace CompilerHW
     /// </summary>
     internal class IRGenerator
     {
+        // 上下文对象
+        private readonly LLVMContextRef m_Context;
         // 模块对象
-        private readonly LLVMModuleRef m_Module;
+        private LLVMModuleRef m_Module;
         // 构造器对象栈
-        private readonly LLVMBuilderRef m_Builder;
+        private LLVMBuilderRef m_Builder;
         // 符号表
         private readonly SymbolTable m_SymbolTable = new();
         // 用于函数之间传递参数的变量栈
@@ -30,8 +31,9 @@ namespace CompilerHW
 
         public IRGenerator()
         {
-            m_Module = LLVM.ModuleCreateWithName("CMinusMinus");
-            m_Builder = LLVM.CreateBuilder();
+            m_Context = LLVMContextRef.Create();
+            m_Module = LLVMModuleRef.CreateWithName("CMinusMinus");
+            m_Builder = LLVMBuilderRef.Create(m_Context);
         }
 
         /// <summary>
@@ -43,9 +45,8 @@ namespace CompilerHW
         }
 
         public void PrintCode()
-        { 
-            nint ptr = LLVM.PrintModuleToString(m_Module);
-            Console.WriteLine(Marshal.PtrToStringAnsi(ptr));
+        {
+            Console.WriteLine(m_Module.PrintToString());
         }
 
         public void VisitProgram(ProgramContext context)
@@ -70,15 +71,15 @@ namespace CompilerHW
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbol(name).Pointer != IntPtr.Zero)
+            if (m_SymbolTable.GetSymbol(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"变量 {name} 已经存在，不可重定义");
             }
 
             // 创建基本块
-            LLVM.BuildBr(m_Builder, AppendBasicBlock("declaration"));
+            AppendAndGotoBasicBlock("declaration");
             // 创建新变量
-            LLVMValueRef variable = LLVM.BuildAlloca(m_Builder, GetDefaultType(), name);
+            LLVMValueRef variable = m_Builder.BuildAlloca(GetDefaultType(), name);
             m_SymbolTable.AddSymbol(name, variable);
             return variable;
         }
@@ -86,8 +87,8 @@ namespace CompilerHW
         public void VisitFunctionDeclaration(FunctionDeclarationContext context)
         {
             // 检查函数符号是否已经存在
-            m_Function = LLVM.GetNamedFunction(m_Module, context.ID().GetText());
-            if (m_Function.Pointer != IntPtr.Zero)
+            m_Function = m_Module.GetNamedFunction(context.ID().GetText());
+            if (m_Function.Handle != IntPtr.Zero)
             {
                 throw new Exception($"函数 {context.ID().GetText()} 已经存在，不可重载");
             }
@@ -96,21 +97,22 @@ namespace CompilerHW
             LLVMTypeRef[] paramTypes =
                 context.parameterList().parameter()?.Select(param => GetDefaultType()).ToArray() ??
                 Array.Empty<LLVMTypeRef>();
-            LLVMTypeRef retType = context.VOID() != null ? LLVM.VoidType() : GetDefaultType();
+            LLVMTypeRef retType = context.VOID() != null ? LLVMTypeRef.Void : GetDefaultType();
 
             // 添加函数
-            m_Function = LLVM.AddFunction(m_Module, context.ID().GetText(), LLVM.FunctionType(retType, paramTypes, false));
-            LLVM.SetLinkage(m_Function, LLVMLinkage.LLVMExternalLinkage);
+            m_Function = m_Module.AddFunction(context.ID().GetText(), LLVMTypeRef.CreateFunction(retType, paramTypes));
+            m_Function.Linkage = LLVMLinkage.LLVMExternalLinkage;
 
             // 进入函数作用域并创建置参数
-            AppendBasicBlock("entry");
+            AppendAndGotoBasicBlock("entry", true);
+
             m_SymbolTable.EnterScope();
             VisitParameterList(context.parameterList());
 
             // 设置函数体
             VisitBlock(context.block());
             // 退出函数定义
-            m_Function.Pointer = IntPtr.Zero;
+            m_Function.Handle = IntPtr.Zero;
             m_SymbolTable.ExitScope();
         }
 
@@ -118,15 +120,15 @@ namespace CompilerHW
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbol(name).Pointer != IntPtr.Zero)
+            if (m_SymbolTable.GetSymbol(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"变量 {name} 已经存在，不可重定义");
             }
 
             // 创建基本块
-            LLVM.BuildBr(m_Builder, AppendBasicBlock("arrayDeclaration"));
+            AppendAndGotoBasicBlock("arrayDeclaration");
             // 创建新的数组变量
-            LLVMValueRef array = LLVM.BuildAlloca(m_Builder, GetArrayType(context), name);
+            LLVMValueRef array = m_Builder.BuildAlloca(GetArrayType(context), name);
             m_SymbolTable.AddSymbol(name, array);
             return array;
         }
@@ -140,19 +142,19 @@ namespace CompilerHW
         {
             // 检查参数名是否重定义
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbolInTop(name).Pointer != IntPtr.Zero)
+            if (m_SymbolTable.GetSymbolInTop(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"参数 {name} 已经存在，不可重定义");
             }
 
             // 设置函数的函数名
-            LLVMValueRef param = LLVM.GetParam(m_Function, (uint)index);
-            LLVM.SetValueName(param, name);
+            LLVMValueRef param = m_Function.GetParam((uint)index);
+            param.Name = name;
 
             // 创建新的参数
             LLVMTypeRef type = GetDefaultType();
-            LLVMValueRef value = LLVM.BuildAlloca(m_Builder, type, name);
-            LLVM.BuildStore(m_Builder, value, param);
+            LLVMValueRef value = m_Builder.BuildAlloca(type, name);
+            m_Builder.BuildStore(value, param);
             m_SymbolTable.AddSymbol(name, value);
             return type;
         }
@@ -195,54 +197,94 @@ namespace CompilerHW
                 VisitIfStatement(context.ifStatement());
         }
 
-        public LLVMValueRef VisitAssignmentStatement(AssignmentStatementContext context)
+        public void VisitAssignmentStatement(AssignmentStatementContext context)
         {
-            return new LLVMValueRef();
+            LLVMValueRef lhs;
+            // 获取普通变量
+            if (context.ID() != null)
+            {
+                string name = context.ID().GetText();
+                if (m_SymbolTable.GetSymbol(name).Handle == IntPtr.Zero)
+                    throw new Exception($"变量 {name} 未定义");
+                lhs = m_SymbolTable.GetSymbol(name);
+            }
+            // 获取数组变量
+            else
+            {
+                lhs = VisitArray(context.array());
+            }
+
+            // 计算右值
+            LLVMValueRef rhs = VisitExpression(context.expression());
+
+            // 生成赋值指令
+            m_Builder.BuildStore(rhs, lhs);
         }
 
-        public LLVMValueRef VisitReturnStatement(ReturnStatementContext context)
+        public void VisitReturnStatement(ReturnStatementContext context)
         {
-            return new LLVMValueRef();
+            // 如果存在返回值，生成返回值的代码
+            LLVMValueRef returnValue = new(IntPtr.Zero);
+            if (context.expression() != null)
+            {
+                returnValue = VisitExpression(context.expression());
+            }
+
+            // 生成返回指令
+            m_Builder.BuildRet(returnValue);
         }
 
-        public LLVMValueRef VisitWhileStatement(WhileStatementContext context)
+        public void VisitWhileStatement(WhileStatementContext context)
         {
-            return new LLVMValueRef();
+            // 创建基本块
+            LLVMBasicBlockRef condBlock = AppendAndGotoBasicBlock("cond");
+            LLVMBasicBlockRef loopBlock = m_Function.AppendBasicBlock("loop");
+            LLVMBasicBlockRef endBlock = m_Function.AppendBasicBlock("endLoop");
+
+            // 生成条件判断基本块
+            LLVMValueRef condValue = VisitExpression(context.expression());
+            m_Builder.BuildCondBr(condValue, loopBlock, endBlock);
+
+            // 生成循环体的代码
+            m_Builder.PositionAtEnd(loopBlock);
+            VisitBlock(context.block());
+            m_Builder.BuildBr(condBlock);  // 从循环体跳转回条件判断基本块
+
+            // 定位到循环结束后的基本块
+            m_Builder.PositionAtEnd(endBlock);
         }
 
         public void VisitIfStatement(IfStatementContext context)
         {
             // 创建基本块
-            LLVMBasicBlockRef thenBlock = LLVM.AppendBasicBlock(m_Function, "then");
-            LLVMBasicBlockRef elseBlock = LLVM.AppendBasicBlock(m_Function, "else");
-            LLVMBasicBlockRef mergeBlock = LLVM.AppendBasicBlock(m_Function, "ifStatement");    // 两个分支需要合并到一个基本块，方便后续处理
+            AppendAndGotoBasicBlock("cond");
+            LLVMBasicBlockRef thenBlock = m_Function.AppendBasicBlock("then");
+            LLVMBasicBlockRef elseBlock = m_Function.AppendBasicBlock("else");
+            LLVMBasicBlockRef mergeBlock = m_Function.AppendBasicBlock("endIf");    // 两个分支需要合并到一个基本块，方便后续处理
 
             // 生成条件表达式的代码
             LLVMValueRef condValue = VisitExpression(context.expression());
 
             // 生成分支指令
-            LLVM.BuildCondBr(m_Builder, condValue, thenBlock, elseBlock);
+            m_Builder.BuildCondBr(condValue, thenBlock, elseBlock);
 
             // 生成then语句的代码
-            LLVM.PositionBuilderAtEnd(m_Builder, thenBlock);
+            m_Builder.PositionAtEnd(thenBlock);
             VisitBlock(context.block(0));
-            LLVM.BuildBr(m_Builder, mergeBlock);  // 从then分支跳转到merge基本块
+            m_Builder.BuildBr(mergeBlock);  // 从then分支跳转到merge基本块
 
             // 生成else语句的代码（如果存在）
-            LLVM.PositionBuilderAtEnd(m_Builder, elseBlock);
+            m_Builder.PositionAtEnd(elseBlock);
             if (context.block().Length > 1)
                 VisitBlock(context.block(1));
-            LLVM.BuildBr(m_Builder, mergeBlock);  // 从else分支跳转到merge基本块
+            m_Builder.BuildBr(mergeBlock);  // 从else分支跳转到merge基本块
 
             // 定位到merge基本块
-            LLVM.PositionBuilderAtEnd(m_Builder, mergeBlock);
+            m_Builder.PositionAtEnd(mergeBlock);
         }
 
         public LLVMValueRef VisitExpression(ExpressionContext context)
         {
-            // 生成基本块
-            LLVM.BuildBr(m_Builder, AppendBasicBlock("expression"));
-
             // 非比较表达式
             if (context.relop() == null)
             {
@@ -254,7 +296,7 @@ namespace CompilerHW
                 LLVMValueRef lhs = VisitAdditiveExpression(context.additiveExpression(0));
                 LLVMIntPredicate relop = VisitRelop(context.relop());
                 LLVMValueRef rhs = VisitAdditiveExpression(context.additiveExpression(1));
-                return LLVM.BuildICmp(m_Builder, relop, lhs, rhs, "relop_tmp");
+                return m_Builder.BuildICmp(relop, lhs, rhs, "relop_tmp");
             }
         }
 
@@ -269,8 +311,8 @@ namespace CompilerHW
                 LLVMValueRef rhs = VisitMultipleExpression(context.multipleExpression(i));
                 ret = terminal.Symbol.Type switch
                 {
-                    PLUS  => LLVM.BuildAdd(m_Builder, ret, rhs, "add_tmp"),
-                    MINUS => LLVM.BuildSub(m_Builder, ret, rhs, "sub_tmp"),
+                    PLUS  => m_Builder.BuildAdd(ret, rhs, "add_tmp"),
+                    MINUS => m_Builder.BuildSub(ret, rhs, "sub_tmp"),
                     _     => ret
                 };
             }
@@ -288,8 +330,8 @@ namespace CompilerHW
                 LLVMValueRef rhs = VisitFactor(context.factor(i));
                 ret = terminal.Symbol.Type switch
                 {
-                    MULTIPLY => LLVM.BuildMul(m_Builder, ret, rhs, "mul_tmp"),
-                    DIVIDE   => LLVM.BuildExactUDiv(m_Builder, ret, rhs, "div_tmp"),
+                    MULTIPLY => m_Builder.BuildMul(ret, rhs, "mul_tmp"),
+                    DIVIDE   => m_Builder.BuildExactSDiv(ret, rhs, "div_tmp"),
                     _        => ret
                 };
             }
@@ -300,40 +342,53 @@ namespace CompilerHW
         {
             // 数字常量
             if (context.NUM() != null)
-                return LLVM.ConstInt(GetDefaultType(), GetNum(context.NUM()), false);
+                return LLVMValueRef.CreateConstInt(GetDefaultType(), GetNum(context.NUM()));
             // 表达式
             if (context.expression() != null)
                 return VisitExpression(context.expression());
             // 数组值
             if (context.array() != null)
-                return VisitArray(context.array());
+                return m_Builder.BuildLoad2(GetDefaultType(), VisitArray(context.array()), "element");
             string name = context.ID().GetText();
             // 函数返回值
             if (context.call() != null)
             {
-                if (LLVM.GetNamedFunction(m_Module, name).Pointer == IntPtr.Zero)
+                LLVMValueRef func = m_Module.GetNamedFunction(name);
+                if (func.Handle == IntPtr.Zero)
                     throw new Exception($"函数 {name} 未定义");
-                return VisitCall(name, context.call());
+                return VisitCall(func, context.call());
             }
             // 变量
-            if (m_SymbolTable.GetSymbol(name).Pointer == IntPtr.Zero)
+            if (m_SymbolTable.GetSymbol(name).Handle == IntPtr.Zero)
                 throw new Exception($"变量 {name} 未定义");
             return m_SymbolTable.GetSymbol(name);
         }
 
-        public LLVMValueRef VisitCall(string funcName, CallContext context)
+        public LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
         {
-            return new LLVMValueRef();
+            return m_Builder.BuildCall2(func.TypeOf.ReturnType, func, VisitArgument(context.argument()), "call");
         }
 
-        public LLVMValueRef VisitArgument(ArgumentContext context)
+        public LLVMValueRef[] VisitArgument(ArgumentContext context)
         {
-            return new LLVMValueRef();
+            return context.expression().Select(VisitExpression).ToArray();
         }
 
         public LLVMValueRef VisitArray(ArrayContext context)
         {
-            return new LLVMValueRef();
+            // 获取所有索引值
+            List<LLVMValueRef> indices = new() { VisitExpression(context.expression()) };
+            while (context.array() != null)
+            {
+                context = context.array();
+                indices.Insert(0, VisitExpression(context.expression()));
+            }
+            // 查找数组
+            LLVMValueRef array = m_SymbolTable.GetSymbol(context.ID().GetText());
+            if (array.Handle == IntPtr.Zero)
+                throw new Exception($"数组 {context.ID().GetText()} 未定义");
+            // 返回数组元素的地址
+            return m_Builder.BuildGEP2(GetDefaultType(), array, indices.ToArray(), "elementPtr");
         }
 
         public LLVMIntPredicate VisitRelop(RelopContext context)
@@ -355,21 +410,23 @@ namespace CompilerHW
         }
 
         // 获取默认类型
-        private static LLVMTypeRef GetDefaultType() => LLVM.Int32Type();
+        private static LLVMTypeRef GetDefaultType() => LLVMTypeRef.Int32;
         // 获取数字解析结果
         private static ulong GetNum(ITerminalNode terminal) => ulong.Parse(terminal.GetText());
         // 获取数组类型
         private static LLVMTypeRef GetArrayType(ArrayDeclarationContext context)
         {
             LLVMTypeRef ret = GetDefaultType();
-            return context.NUM().Aggregate(ret, (current, num) => LLVM.ArrayType(current, uint.Parse(num.GetText())));
+            return context.NUM().Aggregate(ret, (current, num) => LLVMTypeRef.CreateArray(current, uint.Parse(num.GetText())));
         }
 
         // 创建基本块并将构造指针置于该基本块起始处
-        private LLVMBasicBlockRef AppendBasicBlock(string name)
+        private LLVMBasicBlockRef AppendAndGotoBasicBlock(string name, bool entry = false)
         {
-            LLVMBasicBlockRef block = LLVM.AppendBasicBlock(m_Function, name);
-            LLVM.PositionBuilderAtEnd(m_Builder, block);
+            LLVMBasicBlockRef block = m_Function.AppendBasicBlock(name);
+            if (!entry)
+                m_Builder.BuildBr(block);
+            m_Builder.PositionAtEnd(block);
             return block;
         }
     }

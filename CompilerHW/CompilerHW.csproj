@@ -16,12 +16,20 @@
     <PackageReference Include="Antlr4BuildTasks" Version="12.2.0" />
     <PackageReference Include="libLLVM" Version="15.0.0" />
     <PackageReference Include="libLLVM.runtime.win-x64" Version="15.0.0" />
-    <PackageReference Include="LLVMSharp" Version="5.0.0" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
   </ItemGroup>
 
 	<ItemGroup>
 		<Antlr4 Include="CMinusMinus.g4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="LLVMSharp">
+	    <HintPath>..\..\..\NuGet\LLVMSharp\artifacts\bin\sources\LLVMSharp\Debug\net7.0\LLVMSharp.dll</HintPath>
+	  </Reference>
+	  <Reference Include="LLVMSharp.Interop">
+	    <HintPath>..\..\..\NuGet\LLVMSharp\artifacts\bin\sources\LLVMSharp\Debug\net7.0\LLVMSharp.Interop.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 
 </Project>

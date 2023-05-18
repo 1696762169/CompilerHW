@@ -14,6 +14,8 @@ namespace CompilerHW
     {
         private static void Main(string[] args)
         {
+            LLVMArrayTest.Test();
+
 #if TEST_EXPRESSION
             using TextReader textReader = File.OpenText("test_files/expression.txt");
 #else
