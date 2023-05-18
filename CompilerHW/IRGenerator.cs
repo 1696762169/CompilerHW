@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Antlr4.Runtime.Tree;
 using static CMinusMinusParser;
 
 namespace CompilerHW
@@ -182,9 +183,16 @@ namespace CompilerHW
             return new LLVMValueRef();
         }
 
-        public LLVMValueRef VisitStatement(StatementContext context)
+        public void VisitStatement(StatementContext context)
         {
-            return new LLVMValueRef();
+            if (context.assignmentStatement() != null)
+                VisitAssignmentStatement(context.assignmentStatement());
+            else if (context.returnStatement() != null)
+                VisitReturnStatement(context.returnStatement());
+            else if (context.whileStatement() != null)
+                VisitWhileStatement(context.whileStatement());
+            else if (context.ifStatement() != null)
+                VisitIfStatement(context.ifStatement());
         }
 
         public LLVMValueRef VisitAssignmentStatement(AssignmentStatementContext context)
@@ -202,13 +210,39 @@ namespace CompilerHW
             return new LLVMValueRef();
         }
 
-        public LLVMValueRef VisitIfStatement(IfStatementContext context)
+        public void VisitIfStatement(IfStatementContext context)
         {
-            return new LLVMValueRef();
+            // 创建基本块
+            LLVMBasicBlockRef thenBlock = LLVM.AppendBasicBlock(m_Function, "then");
+            LLVMBasicBlockRef elseBlock = LLVM.AppendBasicBlock(m_Function, "else");
+            LLVMBasicBlockRef mergeBlock = LLVM.AppendBasicBlock(m_Function, "ifStatement");    // 两个分支需要合并到一个基本块，方便后续处理
+
+            // 生成条件表达式的代码
+            LLVMValueRef condValue = VisitExpression(context.expression());
+
+            // 生成分支指令
+            LLVM.BuildCondBr(m_Builder, condValue, thenBlock, elseBlock);
+
+            // 生成then语句的代码
+            LLVM.PositionBuilderAtEnd(m_Builder, thenBlock);
+            VisitBlock(context.block(0));
+            LLVM.BuildBr(m_Builder, mergeBlock);  // 从then分支跳转到merge基本块
+
+            // 生成else语句的代码（如果存在）
+            LLVM.PositionBuilderAtEnd(m_Builder, elseBlock);
+            if (context.block().Length > 1)
+                VisitBlock(context.block(1));
+            LLVM.BuildBr(m_Builder, mergeBlock);  // 从else分支跳转到merge基本块
+
+            // 定位到merge基本块
+            LLVM.PositionBuilderAtEnd(m_Builder, mergeBlock);
         }
 
         public LLVMValueRef VisitExpression(ExpressionContext context)
         {
+            // 生成基本块
+            LLVM.BuildBr(m_Builder, AppendBasicBlock("expression"));
+
             // 非比较表达式
             if (context.relop() == null)
             {
@@ -226,20 +260,68 @@ namespace CompilerHW
 
         public LLVMValueRef VisitAdditiveExpression(AdditiveExpressionContext context)
         {
-            return new LLVMValueRef();
+            LLVMValueRef ret = VisitMultipleExpression(context.multipleExpression(0));
+            // 取两个子节点 分别是操作符和操作数
+            for (int i = 1; i < context.ChildCount; i += 2)
+            {
+                if (context.GetChild(i) is not ITerminalNode terminal)
+                    throw new Exception("表达式操作符不正确");
+                LLVMValueRef rhs = VisitMultipleExpression(context.multipleExpression(i));
+                ret = terminal.Symbol.Type switch
+                {
+                    PLUS  => LLVM.BuildAdd(m_Builder, ret, rhs, "add_tmp"),
+                    MINUS => LLVM.BuildSub(m_Builder, ret, rhs, "sub_tmp"),
+                    _     => ret
+                };
+            }
+            return ret;
         }
 
         public LLVMValueRef VisitMultipleExpression(MultipleExpressionContext context)
         {
-            return new LLVMValueRef();
+            LLVMValueRef ret = VisitFactor(context.factor(0));
+            // 取两个子节点 分别是操作符和操作数
+            for (int i = 1; i < context.ChildCount; i += 2)
+            {
+                if (context.GetChild(i) is not ITerminalNode terminal)
+                    throw new Exception("表达式操作符不正确");
+                LLVMValueRef rhs = VisitFactor(context.factor(i));
+                ret = terminal.Symbol.Type switch
+                {
+                    MULTIPLY => LLVM.BuildMul(m_Builder, ret, rhs, "mul_tmp"),
+                    DIVIDE   => LLVM.BuildExactUDiv(m_Builder, ret, rhs, "div_tmp"),
+                    _        => ret
+                };
+            }
+            return ret;
         }
 
         public LLVMValueRef VisitFactor(FactorContext context)
         {
-            return new LLVMValueRef();
+            // 数字常量
+            if (context.NUM() != null)
+                return LLVM.ConstInt(GetDefaultType(), GetNum(context.NUM()), false);
+            // 表达式
+            if (context.expression() != null)
+                return VisitExpression(context.expression());
+            // 数组值
+            if (context.array() != null)
+                return VisitArray(context.array());
+            string name = context.ID().GetText();
+            // 函数返回值
+            if (context.call() != null)
+            {
+                if (LLVM.GetNamedFunction(m_Module, name).Pointer == IntPtr.Zero)
+                    throw new Exception($"函数 {name} 未定义");
+                return VisitCall(name, context.call());
+            }
+            // 变量
+            if (m_SymbolTable.GetSymbol(name).Pointer == IntPtr.Zero)
+                throw new Exception($"变量 {name} 未定义");
+            return m_SymbolTable.GetSymbol(name);
         }
 
-        public LLVMValueRef VisitCall(CallContext context)
+        public LLVMValueRef VisitCall(string funcName, CallContext context)
         {
             return new LLVMValueRef();
         }
@@ -273,9 +355,11 @@ namespace CompilerHW
         }
 
         // 获取默认类型
-        private LLVMTypeRef GetDefaultType() => LLVM.Int32Type();
+        private static LLVMTypeRef GetDefaultType() => LLVM.Int32Type();
+        // 获取数字解析结果
+        private static ulong GetNum(ITerminalNode terminal) => ulong.Parse(terminal.GetText());
         // 获取数组类型
-        private LLVMTypeRef GetArrayType(ArrayDeclarationContext context)
+        private static LLVMTypeRef GetArrayType(ArrayDeclarationContext context)
         {
             LLVMTypeRef ret = GetDefaultType();
             return context.NUM().Aggregate(ret, (current, num) => LLVM.ArrayType(current, uint.Parse(num.GetText())));
