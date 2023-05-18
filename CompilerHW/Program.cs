@@ -50,7 +50,7 @@ namespace CompilerHW
 #endif
 
             // 将语法树转换为四元式序列
-            QuadrupleGenerator quadGenerator = new();
+            IRGenerator quadGenerator = new();
         }
     }
 }
