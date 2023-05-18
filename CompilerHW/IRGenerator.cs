@@ -25,7 +25,7 @@ namespace CompilerHW
         // 符号表
         private readonly SymbolTable m_SymbolTable = new();
         // 用于函数之间传递参数的变量栈
-        private readonly Stack<LLVMValueRef> m_ValueStack = new();
+        private readonly Dictionary<string, LLVMTypeRef> m_FuncTypes = new();
         // 当前正在构造的函数
         private LLVMValueRef m_Function;
 
@@ -100,11 +100,15 @@ namespace CompilerHW
             LLVMTypeRef retType = context.VOID() != null ? LLVMTypeRef.Void : GetDefaultType();
 
             // 添加函数
-            m_Function = m_Module.AddFunction(context.ID().GetText(), LLVMTypeRef.CreateFunction(retType, paramTypes));
+            string name = context.ID().GetText();
+            LLVMTypeRef funcType = LLVMTypeRef.CreateFunction(retType, paramTypes);
+            m_FuncTypes.Add(name, funcType);
+            m_Function = m_Module.AddFunction(name, funcType);
             m_Function.Linkage = LLVMLinkage.LLVMExternalLinkage;
 
             // 进入函数作用域并创建置参数
             AppendAndGotoBasicBlock("entry", true);
+            LLVMTypeRef funcype = new LLVMTypeRef(m_Function.TypeOf.Handle);
 
             m_SymbolTable.EnterScope();
             VisitParameterList(context.parameterList());
@@ -366,7 +370,8 @@ namespace CompilerHW
 
         public LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
         {
-            return m_Builder.BuildCall2(func.TypeOf.ReturnType, func, VisitArgument(context.argument()), "call");
+            LLVMValueRef[] args = VisitArgument(context.argument());
+            return m_Builder.BuildCall2(m_FuncTypes[func.Name], func, args, "call");
         }
 
         public LLVMValueRef[] VisitArgument(ArgumentContext context)
