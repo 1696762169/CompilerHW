@@ -35,20 +35,17 @@ WS : [ \t\r\n]+ -> skip ;
 // 语法定义
 program : declaration*;
 // 声明
-declaration : INT ID declarationType
-            | VOID ID functionDeclaration
+declaration : variableDeclaration
+            | functionDeclaration
+            | arrayDeclaration
             ;
-// 声明类型
-declarationType : variableDeclaration
-                | functionDeclaration
-                | arrayDeclaration
-                ;
 // 变量声明（不可赋初值）
-variableDeclaration : SEMICOLON ;
+variableDeclaration : INT ID SEMICOLON ;
 // 函数声明
-functionDeclaration : LEFT_PAREN parameterList RIGHT_PAREN block ;
+functionDeclaration : INT ID LEFT_PAREN parameterList RIGHT_PAREN block
+                    | VOID ID LEFT_PAREN parameterList RIGHT_PAREN block;
 // 数组声明
-arrayDeclaration : LEFT_BRACKET NUM RIGHT_BRACKET (LEFT_BRACKET NUM RIGHT_BRACKET)* SEMICOLON;
+arrayDeclaration : INT ID LEFT_BRACKET NUM RIGHT_BRACKET (LEFT_BRACKET NUM RIGHT_BRACKET)* SEMICOLON;
 // 参数列表（不能为空，只能写void）
 parameterList : parameter (COMMA parameter)*
               | VOID
@@ -58,8 +55,8 @@ parameter : INT ID ;
 // 语句块（不能省略大括号）
 block : LEFT_BRACE (innerDeclaration | statement)* RIGHT_BRACE ;
 // 内部声明
-innerDeclaration : INT ID variableDeclaration
-                 | INT ID arrayDeclaration
+innerDeclaration : variableDeclaration
+                 | arrayDeclaration
                  ;
 // 表达式语句
 statement : ifStatement

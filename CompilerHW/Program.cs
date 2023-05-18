@@ -1,5 +1,8 @@
 ﻿//#define SHOW_LEXER
 //#define SHOW_PARSER
+#define SHOW_QUAD
+
+//#define TEST_EXPRESSION
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using System.IO;
@@ -11,7 +14,11 @@ namespace CompilerHW
     {
         private static void Main(string[] args)
         {
-            using TextReader textReader = File.OpenText("input.txt");
+#if TEST_EXPRESSION
+            using TextReader textReader = File.OpenText("test_files/expression.txt");
+#else
+            using TextReader textReader = File.OpenText("test_files/input.txt");
+#endif
 
             // 创建字符流
             AntlrInputStream input = new(textReader);
@@ -40,7 +47,11 @@ namespace CompilerHW
             // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
             // 通过语法分析器创建语法树
-            ParserRuleContext tree = parser.program();
+#if TEST_EXPRESSION
+            CMinusMinusParser.ExpressionContext tree = parser.expression();
+#else
+            CMinusMinusParser.ProgramContext tree = parser.program();
+#endif
 #if SHOW_PARSER
             // 展示语法分析结果
             DisplayTree display = new (CMinusMinusParser.ruleNames);
@@ -51,6 +62,15 @@ namespace CompilerHW
 
             // 将语法树转换为四元式序列
             IRGenerator quadGenerator = new();
+#if TEST_EXPRESSION
+            quadGenerator.VisitExpression(tree);
+#else
+            quadGenerator.Generate(tree);
+#endif
+#if SHOW_QUAD
+            // 展示四元式序列
+            quadGenerator.PrintCode();
+#endif
         }
     }
 }
