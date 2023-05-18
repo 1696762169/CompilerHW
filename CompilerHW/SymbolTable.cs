@@ -19,22 +19,32 @@ namespace CompilerHW
             m_ScopeStack.Push(new Dictionary<string, LLVMValueRef>());
         }
 
-        // 进入新作用域
+        /// <summary>
+        /// 进入新作用域
+        /// </summary>
         public void EnterScope()
         {
             m_ScopeStack.Push(new Dictionary<string, LLVMValueRef>());
         }
-        // 离开作用域
+        /// <summary>
+        /// 离开作用域
+        /// </summary>
         public void ExitScope()
         {
             m_ScopeStack.Pop();
         }
-        // 添加符号
+
+        /// <summary>
+        /// 添加符号
+        /// </summary>
         public void AddSymbol(string name, LLVMValueRef value)
         {
             m_ScopeStack.Peek()[name] = value;
         }
-        // 移除符号
+
+        /// <summary>
+        /// 在所有符号表中获取符号
+        /// </summary>
         public LLVMValueRef GetSymbol(string name)
         {
             foreach (var scope in m_ScopeStack)
@@ -45,6 +55,15 @@ namespace CompilerHW
                 }
             }
             return new LLVMValueRef(IntPtr.Zero);
+        }
+        /// <summary>
+        /// 在最上层的符号表中获取符号
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public LLVMValueRef GetSymbolInTop(string name)
+        {
+            return m_ScopeStack.Peek().TryGetValue(name, out var value) ? value : new LLVMValueRef(IntPtr.Zero);
         }
     }
 }
