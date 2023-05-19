@@ -10,54 +10,51 @@ namespace CompilerHW
 {
     internal class DisplayTree
     {
-        private StringBuilder jsonBuilder;
-        private IList<string> ruleNames;
+        private readonly StringBuilder m_JsonBuilder;
+        private readonly IList<string> m_RuleNames;
 
-        public DisplayTree(IList<string> ruleNames)
+        public DisplayTree(IList<string> ruleNames, IParseTree tree)
         {
-            this.ruleNames = ruleNames;
-            jsonBuilder = new StringBuilder();
+            m_RuleNames = ruleNames;
+            m_JsonBuilder = new StringBuilder();
+            GenerateTree(tree);
         }
 
-
-
-        public void Visit(IParseTree tree)
+        private void GenerateTree(IParseTree tree)
         {
+            if (tree.Payload is CommonToken token)
+            {
+                m_JsonBuilder.Append("{\"Token\": \"" + token.Text + "\"}");
+                return;
+            }
             if (tree.Payload is not RuleContext ctx)
                 return;
 
-            jsonBuilder.Append("{ ");
-            jsonBuilder.Append("\"Rule\": \"" + ruleNames[ctx.RuleIndex] + "\"");
+            m_JsonBuilder.Append("{ ");
+            m_JsonBuilder.Append("\"Rule\": \"" + m_RuleNames[ctx.RuleIndex] + "\"");
 
             if (tree.ChildCount > 0)
             {
-                jsonBuilder.Append(", \"Children\": [ ");
-
+                m_JsonBuilder.Append(", \"Children\": [ ");
                 for (int i = 0; i < tree.ChildCount; i++)
                 {
                     if (i > 0)
-                        jsonBuilder.Append(", ");
-
-                    if (tree.GetChild(i) is RuleContext)
-                        Visit(tree.GetChild(i));
-                    else
-                        jsonBuilder.Append("{\"Token\": \"" + ((CommonToken)tree.GetChild(i).Payload).Text + "\"}");
+                        m_JsonBuilder.Append(", ");
+                    GenerateTree(tree.GetChild(i));
                 }
-
-                jsonBuilder.Append(" ]");
+                m_JsonBuilder.Append(" ]");
             }
-
-            jsonBuilder.Append(" }");
+            m_JsonBuilder.Append(" }");
         }
 
         public void PrintTreeAsJson()
         {
-            Console.WriteLine(jsonBuilder.ToString());
+            Console.WriteLine(m_JsonBuilder.ToString());
         }
 
         public void WriteToFileAsJson(string path)
         {
-            File.WriteAllText(path, jsonBuilder.ToString());
+            File.WriteAllText(path, m_JsonBuilder.ToString());
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -21,6 +21,15 @@
 
 	<ItemGroup>
 		<Antlr4 Include="CMinusMinus.g4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="LLVMSharp">
+	    <HintPath>..\..\..\NuGet\LLVMSharp\artifacts\bin\sources\LLVMSharp\Debug\net7.0\LLVMSharp.dll</HintPath>
+	  </Reference>
+	  <Reference Include="LLVMSharp.Interop">
+	    <HintPath>..\..\..\NuGet\LLVMSharp\artifacts\bin\sources\LLVMSharp\Debug\net7.0\LLVMSharp.Interop.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 
 </Project>
