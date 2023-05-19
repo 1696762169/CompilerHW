@@ -1,6 +1,4 @@
-﻿using Antlr4.Runtime;
-using LLVMSharp;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -14,10 +12,10 @@ namespace CompilerHW
     /// <summary>
     /// LLVM IR产生器（通过语法树产生）
     /// </summary>
-    internal class IRGenerator
+    internal class IRGenerator : IDisposable
     {
         // 上下文对象
-        private readonly LLVMContextRef m_Context;
+        private LLVMContextRef m_Context;
         // 模块对象
         private LLVMModuleRef m_Module;
         // 构造器对象栈
@@ -48,8 +46,23 @@ namespace CompilerHW
         {
             Console.WriteLine(m_Module.PrintToString());
         }
+        public void WriteToFile(string path)
+        {
+            File.WriteAllText(path, m_Module.PrintToString());
+        }
+        public void WriteBitcodeToFile(string path)
+        {
+            if (!File.Exists(path))
+                File.Create(path).Close();
+            m_Module.WriteBitcodeToFile(path);
+        }
 
-        public void VisitProgram(ProgramContext context)
+        public LLVMModuleRef GetModule()
+        {
+            return m_Module;
+        }
+
+        private void VisitProgram(ProgramContext context)
         {
             foreach (var declaration in context.declaration())
             {
@@ -57,7 +70,7 @@ namespace CompilerHW
             }
         }
 
-        public void VisitDeclaration(DeclarationContext context)
+        private void VisitDeclaration(DeclarationContext context)
         {
             if (context.variableDeclaration() != null)
                 VisitVariableDeclaration(context.variableDeclaration());
@@ -67,7 +80,7 @@ namespace CompilerHW
                 VisitArrayDeclaration(context.arrayDeclaration());
         }
 
-        public LLVMValueRef VisitVariableDeclaration(VariableDeclarationContext context)
+        private LLVMValueRef VisitVariableDeclaration(VariableDeclarationContext context)
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
@@ -77,14 +90,14 @@ namespace CompilerHW
             }
 
             // 创建基本块
-            AppendAndGotoBasicBlock("declaration");
+            //AppendAndGotoBasicBlock("declaration");
             // 创建新变量
             LLVMValueRef variable = m_Builder.BuildAlloca(GetDefaultType(), name);
             m_SymbolTable.AddSymbol(name, variable);
             return variable;
         }
 
-        public void VisitFunctionDeclaration(FunctionDeclarationContext context)
+        private void VisitFunctionDeclaration(FunctionDeclarationContext context)
         {
             // 检查函数符号是否已经存在
             m_Function = m_Module.GetNamedFunction(context.ID().GetText());
@@ -108,7 +121,6 @@ namespace CompilerHW
 
             // 进入函数作用域并创建置参数
             AppendAndGotoBasicBlock("entry", true);
-            LLVMTypeRef funcype = new LLVMTypeRef(m_Function.TypeOf.Handle);
 
             m_SymbolTable.EnterScope();
             VisitParameterList(context.parameterList());
@@ -120,7 +132,7 @@ namespace CompilerHW
             m_SymbolTable.ExitScope();
         }
 
-        public LLVMValueRef VisitArrayDeclaration(ArrayDeclarationContext context)
+        private LLVMValueRef VisitArrayDeclaration(ArrayDeclarationContext context)
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
@@ -130,19 +142,19 @@ namespace CompilerHW
             }
 
             // 创建基本块
-            AppendAndGotoBasicBlock("arrayDeclaration");
+            //AppendAndGotoBasicBlock("arrayDeclaration");
             // 创建新的数组变量
             LLVMValueRef array = m_Builder.BuildAlloca(GetArrayType(context), name);
             m_SymbolTable.AddSymbol(name, array);
             return array;
         }
 
-        public LLVMTypeRef[] VisitParameterList(ParameterListContext context)
+        private LLVMTypeRef[] VisitParameterList(ParameterListContext context)
         {
             return context.parameter().Select(VisitParameter).ToArray();
         }
 
-        public LLVMTypeRef VisitParameter(ParameterContext context, int index)
+        private LLVMTypeRef VisitParameter(ParameterContext context, int index)
         {
             // 检查参数名是否重定义
             string name = context.ID().GetText();
@@ -163,7 +175,7 @@ namespace CompilerHW
             return type;
         }
 
-        public void VisitBlock(BlockContext context)
+        private void VisitBlock(BlockContext context)
         {
             // 进入作用域
             m_SymbolTable.EnterScope();
@@ -179,7 +191,7 @@ namespace CompilerHW
             m_SymbolTable.ExitScope();
         }
 
-        public LLVMValueRef VisitInnerDeclaration(InnerDeclarationContext context)
+        private LLVMValueRef VisitInnerDeclaration(InnerDeclarationContext context)
         {
             // 执行创建变量语句
             if (context.variableDeclaration() != null)
@@ -189,7 +201,7 @@ namespace CompilerHW
             return new LLVMValueRef();
         }
 
-        public void VisitStatement(StatementContext context)
+        private void VisitStatement(StatementContext context)
         {
             if (context.assignmentStatement() != null)
                 VisitAssignmentStatement(context.assignmentStatement());
@@ -201,7 +213,7 @@ namespace CompilerHW
                 VisitIfStatement(context.ifStatement());
         }
 
-        public void VisitAssignmentStatement(AssignmentStatementContext context)
+        private void VisitAssignmentStatement(AssignmentStatementContext context)
         {
             LLVMValueRef lhs;
             // 获取普通变量
@@ -225,7 +237,7 @@ namespace CompilerHW
             m_Builder.BuildStore(rhs, lhs);
         }
 
-        public void VisitReturnStatement(ReturnStatementContext context)
+        private void VisitReturnStatement(ReturnStatementContext context)
         {
             // 如果存在返回值，生成返回值的代码
             LLVMValueRef returnValue = new(IntPtr.Zero);
@@ -238,7 +250,7 @@ namespace CompilerHW
             m_Builder.BuildRet(returnValue);
         }
 
-        public void VisitWhileStatement(WhileStatementContext context)
+        private void VisitWhileStatement(WhileStatementContext context)
         {
             // 创建基本块
             LLVMBasicBlockRef condBlock = AppendAndGotoBasicBlock("cond");
@@ -258,7 +270,7 @@ namespace CompilerHW
             m_Builder.PositionAtEnd(endBlock);
         }
 
-        public void VisitIfStatement(IfStatementContext context)
+        private void VisitIfStatement(IfStatementContext context)
         {
             // 创建基本块
             AppendAndGotoBasicBlock("cond");
@@ -287,7 +299,7 @@ namespace CompilerHW
             m_Builder.PositionAtEnd(mergeBlock);
         }
 
-        public LLVMValueRef VisitExpression(ExpressionContext context)
+        private LLVMValueRef VisitExpression(ExpressionContext context)
         {
             // 非比较表达式
             if (context.relop() == null)
@@ -304,7 +316,7 @@ namespace CompilerHW
             }
         }
 
-        public LLVMValueRef VisitAdditiveExpression(AdditiveExpressionContext context)
+        private LLVMValueRef VisitAdditiveExpression(AdditiveExpressionContext context)
         {
             LLVMValueRef ret = VisitMultipleExpression(context.multipleExpression(0));
             // 取两个子节点 分别是操作符和操作数
@@ -323,7 +335,7 @@ namespace CompilerHW
             return ret;
         }
 
-        public LLVMValueRef VisitMultipleExpression(MultipleExpressionContext context)
+        private LLVMValueRef VisitMultipleExpression(MultipleExpressionContext context)
         {
             LLVMValueRef ret = VisitFactor(context.factor(0));
             // 取两个子节点 分别是操作符和操作数
@@ -342,7 +354,7 @@ namespace CompilerHW
             return ret;
         }
 
-        public LLVMValueRef VisitFactor(FactorContext context)
+        private LLVMValueRef VisitFactor(FactorContext context)
         {
             // 数字常量
             if (context.NUM() != null)
@@ -368,18 +380,18 @@ namespace CompilerHW
             return m_SymbolTable.GetSymbol(name);
         }
 
-        public LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
+        private LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
         {
             LLVMValueRef[] args = VisitArgument(context.argument());
             return m_Builder.BuildCall2(m_FuncTypes[func.Name], func, args, "call");
         }
 
-        public LLVMValueRef[] VisitArgument(ArgumentContext context)
+        private LLVMValueRef[] VisitArgument(ArgumentContext context)
         {
             return context.expression().Select(VisitExpression).ToArray();
         }
 
-        public LLVMValueRef VisitArray(ArrayContext context)
+        private LLVMValueRef VisitArray(ArrayContext context)
         {
             // 获取所有索引值
             List<LLVMValueRef> indices = new() { VisitExpression(context.expression()) };
@@ -396,7 +408,7 @@ namespace CompilerHW
             return m_Builder.BuildGEP2(GetDefaultType(), array, indices.ToArray(), "elementPtr");
         }
 
-        public LLVMIntPredicate VisitRelop(RelopContext context)
+        private LLVMIntPredicate VisitRelop(RelopContext context)
         {
             // 根据比较符号返回类型
             if (context.LESS() != null)
@@ -433,6 +445,13 @@ namespace CompilerHW
                 m_Builder.BuildBr(block);
             m_Builder.PositionAtEnd(block);
             return block;
+        }
+
+        public void Dispose()
+        {
+            m_Builder.Dispose();
+            m_Module.Dispose();
+            m_Context.Dispose();
         }
     }
 }

@@ -13,13 +13,14 @@ namespace CompilerHW
         private readonly StringBuilder m_JsonBuilder;
         private readonly IList<string> m_RuleNames;
 
-        public DisplayTree(IList<string> ruleNames)
+        public DisplayTree(IList<string> ruleNames, IParseTree tree)
         {
             m_RuleNames = ruleNames;
             m_JsonBuilder = new StringBuilder();
+            GenerateTree(tree);
         }
 
-        public void Display(IParseTree tree)
+        private void GenerateTree(IParseTree tree)
         {
             if (tree.Payload is CommonToken token)
             {
@@ -39,7 +40,7 @@ namespace CompilerHW
                 {
                     if (i > 0)
                         m_JsonBuilder.Append(", ");
-                    Display(tree.GetChild(i));
+                    GenerateTree(tree.GetChild(i));
                 }
                 m_JsonBuilder.Append(" ]");
             }
