@@ -1,8 +1,9 @@
 ﻿//#define SHOW_LEXER
 //#define SHOW_PARSER
-//#define SHOW_QUAD
+#define SHOW_IR
 
-//#define TEST_EXPRESSION
+#define GENERATE_EXECUTABLE
+
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using System.IO;
@@ -14,11 +15,7 @@ namespace CompilerHW
     {
         private static void Main(string[] args)
         {
-#if TEST_EXPRESSION
-            using TextReader textReader = File.OpenText("test_files/expression.txt");
-#else
             using TextReader textReader = File.OpenText("test_files/input.txt");
-#endif
             string outDir = "out_files/";
 
             // 创建字符流
@@ -36,11 +33,7 @@ namespace CompilerHW
             // 通过Token流创建语法分析器
             CMinusMinusParser parser = new(tokens);
             // 通过语法分析器创建语法树
-#if TEST_EXPRESSION
-            CMinusMinusParser.ExpressionContext tree = parser.expression();
-#else
             CMinusMinusParser.ProgramContext tree = parser.program();
-#endif
             DisplayTree display = new (CMinusMinusParser.ruleNames, tree);
 #if SHOW_PARSER
             // 展示语法分析结果
@@ -49,22 +42,22 @@ namespace CompilerHW
             display.WriteToFileAsJson(outDir + "ParseTree.json");
 
             // 将语法树转换为四元式序列
-            IRGenerator quadGenerator = new();
-#if TEST_EXPRESSION
-            quadGenerator.VisitExpression(tree);
-#else
-            quadGenerator.Generate(tree);
-#endif
-#if SHOW_QUAD
-            // 展示四元式序列
-            quadGenerator.PrintCode();
-#endif
-            quadGenerator.WriteToFile(outDir + "IR.ll");
-            string bcPath = outDir + "bitcode.bc";
-            quadGenerator.WriteBitcodeToFile(bcPath);
+            IRGenerator irGenerator = new();
+            irGenerator.Generate(tree);
 
+#if SHOW_IR
+            // 展示四元式序列
+            irGenerator.PrintCode();
+#endif
+            irGenerator.WriteToFile(outDir + "IR.ll");
+            string bcPath = outDir + "bitcode.bc";
+            irGenerator.WriteBitcodeToFile(bcPath);
+            irGenerator.Dispose();
+
+#if GENERATE_EXECUTABLE
             // 生成可执行文件
             ExecutableCreater.CreateExecutable(bcPath, outDir + "CMinusMinus.exe");
+#endif
         }
     }
 }

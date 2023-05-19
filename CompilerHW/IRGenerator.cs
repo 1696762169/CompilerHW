@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define PRINTF
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -27,12 +28,44 @@ namespace CompilerHW
         // 当前正在构造的函数
         private LLVMValueRef m_Function;
 
+        // printf格式字符串索引
+        private enum PrintfType
+        {
+            DeclareVar,
+            DeclareArray,
+            Call,
+            Assign,
+            Return,
+            ReturnVoid,
+        }
+        private readonly Dictionary<PrintfType, LLVMValueRef> m_PrintfTypes = new();
+
         public IRGenerator()
         {
             m_Context = LLVMContextRef.Create();
+
             m_Module = LLVMModuleRef.CreateWithName("CMinusMinus");
             m_Module.Target = "x86_64-pc-windows-msvc19.35.32216";  // 设置目标平台
             m_Builder = LLVMBuilderRef.Create(m_Context);
+
+#if PRINTF
+            // 创建printf函数的声明
+            LLVMTypeRef printfType = LLVMTypeRef.CreateFunction(LLVMTypeRef.Int32, Array.Empty<LLVMTypeRef>(), true);
+            m_Module.AddFunction("printf", printfType);
+            m_FuncTypes.Add("printf", printfType);
+
+            LLVMValueRef globalFunc = m_Module.AddFunction("global", LLVMTypeRef.CreateFunction(LLVMTypeRef.Void, Array.Empty<LLVMTypeRef>()));
+            m_Builder.PositionAtEnd(globalFunc.AppendBasicBlock("entry"));
+
+            m_PrintfTypes.Add(PrintfType.DeclareVar, m_Builder.BuildGlobalStringPtr("定义变量：%s\n", "DeclareVarFormat"));
+            m_PrintfTypes.Add(PrintfType.DeclareArray, m_Builder.BuildGlobalStringPtr("定义数组：%s\n", "DeclareArrayFormat"));
+            m_PrintfTypes.Add(PrintfType.Call, m_Builder.BuildGlobalStringPtr("调用函数：%s\n", "CallFormat"));
+            m_PrintfTypes.Add(PrintfType.Assign, m_Builder.BuildGlobalStringPtr("赋值为：%d\n", "AssignFormat"));
+            m_PrintfTypes.Add(PrintfType.Return, m_Builder.BuildGlobalStringPtr("函数返回：%d\n", "ReturnFormat"));
+            m_PrintfTypes.Add(PrintfType.ReturnVoid, m_Builder.BuildGlobalStringPtr("函数返回 无返回值\n", "ReturnVoidFormat"));
+
+            m_Builder.BuildRet(new LLVMValueRef());
+#endif
         }
 
         /// <summary>
@@ -106,6 +139,8 @@ namespace CompilerHW
             LLVMTypeRef varType = GetDefaultType();
             LLVMValueRef variable = m_Builder.BuildAlloca(varType, name);
             m_SymbolTable.AddSymbol(name, variable, varType);
+
+            PrintF(PrintfType.DeclareVar, name);
             return variable;
         }
 
@@ -159,6 +194,8 @@ namespace CompilerHW
             LLVMTypeRef arrayType = GetArrayType(context);
             LLVMValueRef array = m_Builder.BuildAlloca(arrayType, name);
             m_SymbolTable.AddSymbol(name, array, arrayType);
+
+            PrintF(PrintfType.DeclareArray, name);
             return array;
         }
 
@@ -246,6 +283,7 @@ namespace CompilerHW
             LLVMValueRef rhs = VisitExpression(context.expression());
 
             // 生成赋值指令
+            PrintF(PrintfType.Assign, rhs);
             m_Builder.BuildStore(rhs, lhs);
         }
 
@@ -259,6 +297,10 @@ namespace CompilerHW
             }
 
             // 生成返回指令
+            if (returnValue.Handle == IntPtr.Zero)
+                PrintF(PrintfType.ReturnVoid);
+            else
+                PrintF(PrintfType.Return, returnValue);
             m_Builder.BuildRet(returnValue);
         }
 
@@ -395,6 +437,7 @@ namespace CompilerHW
         private LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
         {
             LLVMValueRef[] args = VisitArgument(context.argument());
+            PrintF(PrintfType.Call, func.Name);
             return m_Builder.BuildCall2(m_FuncTypes[func.Name], func, args, "call");
         }
 
@@ -459,6 +502,27 @@ namespace CompilerHW
                 m_Builder.BuildBr(block);
             m_Builder.PositionAtEnd(block);
             return block;
+        }
+
+        private void PrintF(PrintfType format, params object[] args)
+        {
+#if PRINTF
+            LLVMValueRef func = m_Module.GetNamedFunction("printf");
+            if (func.Handle == IntPtr.Zero)
+                throw new Exception("函数 printf 未定义");
+            LLVMValueRef formatStr = m_PrintfTypes[format];
+            LLVMValueRef[] callArgs = args.Select(arg =>
+            {
+                return arg switch
+                {
+                    int      => LLVMValueRef.CreateConstInt(GetDefaultType(), (ulong)arg),
+                    string str => m_Builder.BuildGlobalStringPtr(str, "string"),
+                    LLVMValueRef value => value,
+                    _ => throw new Exception("未知类型的printf参数：" + arg.GetType())
+                };
+            }).ToArray();
+            m_Builder.BuildCall2(m_FuncTypes["printf"], func, new[] { formatStr }.Concat(callArgs).ToArray(), "print");
+#endif
         }
 
         public void Dispose()
