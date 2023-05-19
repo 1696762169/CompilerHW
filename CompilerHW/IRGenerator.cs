@@ -37,6 +37,7 @@ namespace CompilerHW
             Assign,
             Return,
             ReturnVoid,
+            Argument,
         }
         private readonly Dictionary<PrintfType, LLVMValueRef> m_PrintfTypes = new();
 
@@ -63,6 +64,7 @@ namespace CompilerHW
             m_PrintfTypes.Add(PrintfType.Assign, m_Builder.BuildGlobalStringPtr("赋值为：%d\n", "AssignFormat"));
             m_PrintfTypes.Add(PrintfType.Return, m_Builder.BuildGlobalStringPtr("函数返回：%d\n", "ReturnFormat"));
             m_PrintfTypes.Add(PrintfType.ReturnVoid, m_Builder.BuildGlobalStringPtr("函数返回 无返回值\n", "ReturnVoidFormat"));
+            m_PrintfTypes.Add(PrintfType.Argument, m_Builder.BuildGlobalStringPtr("参数：%d\n", "ArgumentFormat"));
 
             m_Builder.BuildRet(new LLVMValueRef());
 #endif
@@ -217,10 +219,11 @@ namespace CompilerHW
             LLVMValueRef param = m_Function.GetParam((uint)index);
             param.Name = name;
 
-            // 创建新的参数（此处LLVM会自动为参数分配栈上空间）
+            // 创建新的参数（此处创建一个新变量并将参数值赋予该变量）
             LLVMTypeRef type = GetDefaultType();
-            LLVMValueRef value = m_Builder.BuildAlloca(type, name);
-            m_SymbolTable.AddSymbol(name, value, type);
+            LLVMValueRef arg = m_Builder.BuildAlloca(param.TypeOf, "arg_" + name);
+            m_Builder.BuildStore(param, arg);
+            m_SymbolTable.AddSymbol(name, arg, type);
             return type;
         }
 
@@ -431,13 +434,16 @@ namespace CompilerHW
             // 变量
             if (m_SymbolTable.GetValue(name).Handle == IntPtr.Zero)
                 throw new Exception($"变量 {name} 未定义");
-            return m_Builder.BuildLoad2(GetDefaultType(), m_SymbolTable.GetValue(name), $"{name}_value");
+            LLVMValueRef value = m_SymbolTable.GetValue(name);
+            return m_Builder.BuildLoad2(GetDefaultType(), value, $"{name}_value");
         }
 
         private LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
         {
             LLVMValueRef[] args = VisitArgument(context.argument());
             PrintF(PrintfType.Call, func.Name);
+            foreach (LLVMValueRef arg in args)
+                PrintF(PrintfType.Argument, arg);
             return m_Builder.BuildCall2(m_FuncTypes[func.Name], func, args, "call");
         }
 
@@ -462,7 +468,7 @@ namespace CompilerHW
                 throw new Exception($"数组 {name} 未定义");
             // 返回数组元素的地址
             LLVMTypeRef arrayType = m_SymbolTable.GetType(name);
-            return m_Builder.BuildGEP2(arrayType.ElementType, array, indices.ToArray(), "elementPtr");
+            return m_Builder.BuildGEP2(arrayType, array, indices.ToArray(), "elementPtr");
         }
 
         private LLVMIntPredicate VisitRelop(RelopContext context)
