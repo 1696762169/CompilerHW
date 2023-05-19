@@ -24,17 +24,23 @@ namespace CompilerHW
                 Console.WriteLine($"未找到Bitcode文件：{bcPath}");
                 return;
             }
-            // 检查可执行文件路径
+            // 检查可执行文件 不存在时则生成
             string? outDir = Path.GetDirectoryName(outputPath);
             if (outDir != null && !Directory.Exists(outDir))
                 Directory.CreateDirectory(outDir);
+            if (!File.Exists(outputPath)) 
+                File.Create(outputPath).Close();
 
             try
             {
                 // 生成目标文件
-                Run("clang", $"-c -o {Path.Join(outDir, fileName)}.o {bcPath}");
+                string objPath = Path.Join(outDir, fileName) + ".obj";
+                Run("clang", $"-c -o {objPath} {bcPath}");
+                Console.WriteLine($"生成目标文件：{objPath}");
                 // 链接形成可执行文件
-                Run("lld", $"-flavor gnu -o {outputPath} {Path.Join(outDir, fileName)}.o");
+                // /DEFAULTLIB:libcmt表示需要链接C标准库
+                Run("lld-link", $"/out:{outputPath} /DEFAULTLIB:libcmt {objPath}");
+                Console.WriteLine($"生成可执行文件：{outputPath}");
             }
             catch
             {
@@ -77,7 +83,7 @@ namespace CompilerHW
             if (!string.IsNullOrEmpty(error))
             {
                 Console.ForegroundColor = ConsoleColor.DarkRed;
-                Console.WriteLine("Error: " + error);
+                Console.WriteLine($"进程 {process.Id} 错误：{error}");
                 Console.ForegroundColor = ConsoleColor.White;
                 throw new Exception(error);
             }

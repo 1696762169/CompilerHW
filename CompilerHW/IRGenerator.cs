@@ -31,6 +31,7 @@ namespace CompilerHW
         {
             m_Context = LLVMContextRef.Create();
             m_Module = LLVMModuleRef.CreateWithName("CMinusMinus");
+            m_Module.Target = "x86_64-pc-windows-msvc19.35.32216";  // 设置目标平台
             m_Builder = LLVMBuilderRef.Create(m_Context);
         }
 
@@ -40,6 +41,16 @@ namespace CompilerHW
         public void Generate(ProgramContext ctx)
         {
             VisitProgram(ctx);
+            try
+            {
+                m_Module.Verify(LLVMVerifierFailureAction.LLVMReturnStatusAction);
+            }
+            catch (ExternalException e)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.WriteLine($"生成的模块有错误：\n{e.Message}\n");
+                Console.ResetColor();
+            }
         }
 
         public void PrintCode()
@@ -84,7 +95,7 @@ namespace CompilerHW
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbol(name).Handle != IntPtr.Zero)
+            if (m_SymbolTable.GetValue(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"变量 {name} 已经存在，不可重定义");
             }
@@ -92,8 +103,9 @@ namespace CompilerHW
             // 创建基本块
             //AppendAndGotoBasicBlock("declaration");
             // 创建新变量
-            LLVMValueRef variable = m_Builder.BuildAlloca(GetDefaultType(), name);
-            m_SymbolTable.AddSymbol(name, variable);
+            LLVMTypeRef varType = GetDefaultType();
+            LLVMValueRef variable = m_Builder.BuildAlloca(varType, name);
+            m_SymbolTable.AddSymbol(name, variable, varType);
             return variable;
         }
 
@@ -136,7 +148,7 @@ namespace CompilerHW
         {
             // 检查变量符号是否已经存在
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbol(name).Handle != IntPtr.Zero)
+            if (m_SymbolTable.GetValue(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"变量 {name} 已经存在，不可重定义");
             }
@@ -144,8 +156,9 @@ namespace CompilerHW
             // 创建基本块
             //AppendAndGotoBasicBlock("arrayDeclaration");
             // 创建新的数组变量
-            LLVMValueRef array = m_Builder.BuildAlloca(GetArrayType(context), name);
-            m_SymbolTable.AddSymbol(name, array);
+            LLVMTypeRef arrayType = GetArrayType(context);
+            LLVMValueRef array = m_Builder.BuildAlloca(arrayType, name);
+            m_SymbolTable.AddSymbol(name, array, arrayType);
             return array;
         }
 
@@ -158,7 +171,7 @@ namespace CompilerHW
         {
             // 检查参数名是否重定义
             string name = context.ID().GetText();
-            if (m_SymbolTable.GetSymbolInTop(name).Handle != IntPtr.Zero)
+            if (m_SymbolTable.GetValueInTop(name).Handle != IntPtr.Zero)
             {
                 throw new Exception($"参数 {name} 已经存在，不可重定义");
             }
@@ -167,11 +180,10 @@ namespace CompilerHW
             LLVMValueRef param = m_Function.GetParam((uint)index);
             param.Name = name;
 
-            // 创建新的参数
+            // 创建新的参数（此处LLVM会自动为参数分配栈上空间）
             LLVMTypeRef type = GetDefaultType();
             LLVMValueRef value = m_Builder.BuildAlloca(type, name);
-            m_Builder.BuildStore(value, param);
-            m_SymbolTable.AddSymbol(name, value);
+            m_SymbolTable.AddSymbol(name, value, type);
             return type;
         }
 
@@ -220,9 +232,9 @@ namespace CompilerHW
             if (context.ID() != null)
             {
                 string name = context.ID().GetText();
-                if (m_SymbolTable.GetSymbol(name).Handle == IntPtr.Zero)
+                if (m_SymbolTable.GetValue(name).Handle == IntPtr.Zero)
                     throw new Exception($"变量 {name} 未定义");
-                lhs = m_SymbolTable.GetSymbol(name);
+                lhs = m_SymbolTable.GetValue(name);
             }
             // 获取数组变量
             else
@@ -375,9 +387,9 @@ namespace CompilerHW
                 return VisitCall(func, context.call());
             }
             // 变量
-            if (m_SymbolTable.GetSymbol(name).Handle == IntPtr.Zero)
+            if (m_SymbolTable.GetValue(name).Handle == IntPtr.Zero)
                 throw new Exception($"变量 {name} 未定义");
-            return m_SymbolTable.GetSymbol(name);
+            return m_Builder.BuildLoad2(GetDefaultType(), m_SymbolTable.GetValue(name), $"{name}_value");
         }
 
         private LLVMValueRef VisitCall(LLVMValueRef func, CallContext context)
@@ -401,11 +413,13 @@ namespace CompilerHW
                 indices.Insert(0, VisitExpression(context.expression()));
             }
             // 查找数组
-            LLVMValueRef array = m_SymbolTable.GetSymbol(context.ID().GetText());
+            string name = context.ID().GetText();
+            LLVMValueRef array = m_SymbolTable.GetValue(name);
             if (array.Handle == IntPtr.Zero)
-                throw new Exception($"数组 {context.ID().GetText()} 未定义");
+                throw new Exception($"数组 {name} 未定义");
             // 返回数组元素的地址
-            return m_Builder.BuildGEP2(GetDefaultType(), array, indices.ToArray(), "elementPtr");
+            LLVMTypeRef arrayType = m_SymbolTable.GetType(name);
+            return m_Builder.BuildGEP2(arrayType.ElementType, array, indices.ToArray(), "elementPtr");
         }
 
         private LLVMIntPredicate VisitRelop(RelopContext context)

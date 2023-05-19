@@ -13,11 +13,11 @@ namespace CompilerHW
     /// </summary>
     internal class SymbolTable
     {
-        private readonly Stack<Dictionary<string, LLVMValueRef>> m_ScopeStack = new();
+        private readonly Stack<Dictionary<string, (LLVMValueRef value, LLVMTypeRef type)>> m_ScopeStack = new();
         public SymbolTable()
         {
             // 初始时就有一个全局符号表
-            m_ScopeStack.Push(new Dictionary<string, LLVMValueRef>());
+            m_ScopeStack.Push(new Dictionary<string, (LLVMValueRef, LLVMTypeRef)>());
         }
 
         /// <summary>
@@ -25,7 +25,7 @@ namespace CompilerHW
         /// </summary>
         public void EnterScope()
         {
-            m_ScopeStack.Push(new Dictionary<string, LLVMValueRef>());
+            m_ScopeStack.Push(new Dictionary<string, (LLVMValueRef, LLVMTypeRef)>());
         }
         /// <summary>
         /// 离开作用域
@@ -38,21 +38,21 @@ namespace CompilerHW
         /// <summary>
         /// 添加符号
         /// </summary>
-        public void AddSymbol(string name, LLVMValueRef value)
+        public void AddSymbol(string name, LLVMValueRef value, LLVMTypeRef type)
         {
-            m_ScopeStack.Peek()[name] = value;
+            m_ScopeStack.Peek()[name] = (value, type);
         }
 
         /// <summary>
         /// 在所有符号表中获取符号
         /// </summary>
-        public LLVMValueRef GetSymbol(string name)
+        public LLVMValueRef GetValue(string name)
         {
             foreach (var scope in m_ScopeStack)
             {
-                if (scope.TryGetValue(name, out var value))
+                if (scope.TryGetValue(name, out var symbol))
                 {
-                    return value;
+                    return symbol.value;
                 }
             }
             return new LLVMValueRef(IntPtr.Zero);
@@ -62,9 +62,24 @@ namespace CompilerHW
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
-        public LLVMValueRef GetSymbolInTop(string name)
+        public LLVMValueRef GetValueInTop(string name)
         {
-            return m_ScopeStack.Peek().TryGetValue(name, out var value) ? value : new LLVMValueRef(IntPtr.Zero);
+            return m_ScopeStack.Peek().TryGetValue(name, out var symbol) ? symbol.value : new LLVMValueRef(IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// 在所有符号表中获取符号的类型
+        /// </summary>
+        public LLVMTypeRef GetType(string name)
+        {
+            foreach (var scope in m_ScopeStack)
+            {
+                if (scope.TryGetValue(name, out var symbol))
+                {
+                    return symbol.type;
+                }
+            }
+            return new LLVMTypeRef(IntPtr.Zero);
         }
     }
 }
