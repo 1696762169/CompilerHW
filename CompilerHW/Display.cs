@@ -42,7 +42,7 @@ namespace CompilerHW
         }
         private static void ShowToken(IToken token, TextWriter writer)
         {
-            writer.WriteLine($"第 {token.TokenIndex + 1,-3} 个token：{token.Text,-10}，类型：{CMinusMinusLexer.ruleNames[token.Type - 1]}");
+            writer.WriteLine($"第 {token.TokenIndex + 1,-3} 个token：{token.Text,-10}，类型：{CMinusMinusLexer.ruleNames[token.Type - 1], -15}，行数：{token.Line, -4}，列数：{token.Column, -4}");
         }
 
         public static void ShowParser(RuleContext tree, string[] ruleNames)

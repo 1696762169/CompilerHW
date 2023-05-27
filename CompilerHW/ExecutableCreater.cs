@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define IGNORE_WARNING
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -36,11 +37,9 @@ namespace CompilerHW
                 // 生成目标文件
                 string objPath = Path.Join(outDir, fileName) + ".obj";
                 Run("clang", $"-c -o {objPath} {bcPath}");
-                Console.WriteLine($"生成目标文件：{objPath}");
                 // 链接形成可执行文件
                 // /DEFAULTLIB:libcmt表示需要链接C标准库
                 Run("lld-link", $"/out:{outputPath} /DEFAULTLIB:libcmt {objPath}");
-                Console.WriteLine($"生成可执行文件：{outputPath}");
             }
             catch
             {
@@ -82,7 +81,11 @@ namespace CompilerHW
 
             if (!string.IsNullOrEmpty(error))
             {
-                Console.ForegroundColor = ConsoleColor.DarkRed;
+#if IGNORE_WARNING
+                if (error.StartsWith("warning"))
+                    return;
+#endif
+                    Console.ForegroundColor = ConsoleColor.DarkRed;
                 Console.WriteLine($"进程 {process.Id} 错误：{error}");
                 Console.ForegroundColor = ConsoleColor.White;
                 throw new Exception(error);

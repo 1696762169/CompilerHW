@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "CompilerHW": {
+      "commandName": "Project",
+      "commandLineArgs": "test_files/input.txt",
+      "hotReloadEnabled": false
+    }
+  }
+}

@@ -46,7 +46,7 @@ namespace CompilerHW
             m_Context = LLVMContextRef.Create();
 
             m_Module = LLVMModuleRef.CreateWithName("CMinusMinus");
-            m_Module.Target = "x86_64-pc-windows-msvc19.35.32216";  // 设置目标平台
+            //m_Module.Target = "x86_64-pc-windows-msvc19.35.32216";  // 设置目标平台
             m_Builder = LLVMBuilderRef.Create(m_Context);
 
 #if PRINTF
