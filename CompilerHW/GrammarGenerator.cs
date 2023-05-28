@@ -25,7 +25,7 @@ namespace CompilerHW
             public void SyntaxError(TextWriter output, IRecognizer recognizer, IToken offendingSymbol, int line, int charPositionInLine,
                 string msg, RecognitionException e)
             {
-                throw new Exception($"在第 {line} 行第 {charPositionInLine + 1} 列的符号 {offendingSymbol.Text} 附近发生错误");
+                throw new Exception($"在第 {line} 行第 {charPositionInLine + 1} 列的符号 {offendingSymbol.Text} 附近发生错误\n内部错误：{msg}");
             }
 
             public void ReportAmbiguity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, bool exact, BitSet ambigAlts,

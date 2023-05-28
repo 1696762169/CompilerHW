@@ -22,7 +22,7 @@ LESS_EQUALS : '<=' ;
 NOT_EQUALS : '!=' ;
 SEMICOLON : ';' ;
 COMMA : ',' ;
-COMMENT : '/*' .*? '*/' -> skip ;
+COMMENT : '/*' .*? '*/' -> skip ;   // skip表示跳过与之匹配的内容 不生成TOKEN
 LINE_COMMENT : '//' ~[\r\n]* -> skip ;
 LEFT_PAREN : '(' ;
 RIGHT_PAREN : ')' ;

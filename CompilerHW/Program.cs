@@ -120,12 +120,12 @@ namespace CompilerHW
 #if GENERATE_EXECUTABLE
             // 生成可执行文件
             const string OUT_EXECUTABLE = "CMinusMinus.exe";
-            ExecutableCreater.CreateExecutable(OUT_DIR + OUT_BITCODE, OUT_DIR + OUT_EXECUTABLE);
+            ExecutableGenerator.CreateExecutable(OUT_DIR + OUT_BITCODE, OUT_DIR + OUT_EXECUTABLE);
             Console.WriteLine($"已在 {OUT_DIR} 中生成可执行文件 {OUT_EXECUTABLE}");
 #endif
 
             Console.WriteLine("按任意键退出...");
-            //Console.ReadKey();
+            Console.ReadKey();
         }
     }
 }

@@ -11,7 +11,7 @@ namespace CompilerHW
     /// <summary>
     /// 可执行文件生成器（通过LLVM Module）
     /// </summary>
-    internal static class ExecutableCreater
+    internal static class ExecutableGenerator
     {
         /// <summary>
         /// 读入bitcode并将可执行文件写入指定路径
